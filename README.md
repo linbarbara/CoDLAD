@@ -2,15 +2,19 @@
 Source code and data for "A Variational Autoencoder Framework with Tissue-Conditioned Latent Diffusion for Cross-Domain Anticancer Drug Response Prediction"
 
 # Requirements
-All implementations of CoDLAD are based on PyTorch. CoDLAD requires the following dependencies:
-- python==3.7.16
-- pytorch==1.13.1
-- torch_geometric==2.3.1
-- numpy==1.21.5+mkl
-- scipy==1.7.3
-- pandas==1.3.5
-- scikit-learn=1.0.2
-- hickle==5.0.2
+CoDLAD is implemented in Python and PyTorch.
+
+## Tested environment (this repository)
+The following package versions were used to run the code in our current environment:
+- python==3.12.2
+- torch==2.5.1
+- torch_geometric==2.6.1
+- numpy==1.26.4
+- scipy==1.16.0
+- pandas==2.3.1
+- scikit-learn==1.6.1
+- imbalanced-learn==0.14.0
+
 # Data
 - Data defines the data used by the model
     - data/TCGA records training data, test data, and labeling related to the five drugs associated with TCGA.
@@ -34,7 +38,7 @@ All implementations of CoDLAD are based on PyTorch. CoDLAD requires the followin
 Since the `pretrain_tcga.csv` file exceeds GitHub's size limit, it has been split into 14 parts. You **must** merge these parts using our script before running any pretraining. The script automatically handles relative paths.
 
 ```bash
-<!-- Run this from the project root -->
+# Run this from the project root
 python scripts/merge_data.py
 ```
 
@@ -42,17 +46,32 @@ python scripts/merge_data.py
 
 To run **CoDLAD**, users need to organize their data into a **source domain** and a **target domain** with **consistent feature dimensions**. In our implementation, the source domain corresponds to **cell line gene expression data**, while the target domain corresponds to **patient (or tumor) gene expression data**.
 
-### Data Structure Requirements
+### Custom data overview
 
-For both source and target domains, you need to provide the following files in each medication folder:
+CoDLAD has two data usage scenarios:
 
-1. `sourcedata.csv` - Source domain gene expression data (samples x genes)
-2. `sourcelabel.csv` - Binary labels for source domain samples (0/1)
-3. `targetdata.csv` - Target domain gene expression data (samples x genes)
-4. `targetlabel.csv` - Binary labels for target domain samples (0/1)
+1. **Pretraining (cross-domain representation pretraining)**
+   - Uses **unlabeled** source/target gene expression matrices.
+   - Uses **tissue labels** as conditional information for the latent diffusion model.
+   - In the default setting, data is loaded from `data/pretrain_ccle.csv` and `data/pretrain_tcga.csv` together.
+
+2. **Downstream prediction / classification (custom dataset: `--dataset other`)**
+   - Uses **drug response labels** (binary 0/1) for supervised training/evaluation.
+   - Does **not** use tissue labels in this setting.
+
+### Custom downstream dataset format (drug response prediction)
+
+When running `classifier.py` with `--dataset other`, you can use your own data **only if it has the same format as required by this repository**.
+
+For each medication folder under `your_data_folder`, provide **four CSV files**:
+
+1. `sourcedata.csv` - Source domain gene expression (samples x genes)
+2. `sourcelabel.csv` - Source domain binary drug response label (0/1)
+3. `targetdata.csv` - Target domain gene expression (samples x genes)
+4. `targetlabel.csv` - Target domain binary drug response label (0/1)
 
 Note:
->You need to ensure that the data dimensions (gene features) of your source and target domains are the same.
+>You need to ensure that the feature dimensions (genes) of source and target are the same.
 
 ### Reference
 
@@ -105,10 +124,11 @@ At this stage, the pretrained gene expression encoders and drug encoders are loa
 
 ### One-command Reproduction (Optional)
 
-To reproduce all experimental results reported in the paper using the provided data, you can run the following script:
+To reproduce the pipeline (pretraining + downstream evaluation) using the provided data, run:
 
 ```bash
-python train_all.py
+chmod +x run_all.sh
+./run_all.sh
 ```
 
 This script sequentially performs:
@@ -117,10 +137,12 @@ This script sequentially performs:
 
 Alternatively, you can run our program with your own data and some other settings as follows:
 ```
-1. python pretrain_mask_vae.py \
+1. python pretrain.py \
 --outfolder path/to/folder_to_save_pretrain_models \
 --source path/to/your_pretrain_source_data.csv \
---target path/to/your_pretrain_target_data.csv
+--target path/to/your_pretrain_target_data.csv \
+--source_tissue path/to/your_pretrain_source_tissue.csv \
+--target_tissue path/to/your_pretrain_target_tissue.csv
 
 2. python classifier.py \
 --dataset other \
@@ -133,12 +155,7 @@ Alternatively, you can run our program with your own data and some other setting
 Note: 
 >You need to ensure that the data dimensions of your source and target domains are the same.
 
-> The **your_data_folder** is a folder that contains multiple medication folders. Each medication folder must contain the following four CSV files:
+> The **your_data_folder** is a folder that contains multiple medication folders.
 >
->- `sourcedata.csv` - Source domain gene expression data (samples x genes)
->- `sourcelabel.csv` - Binary labels (0/1) for source domain samples
->- `targetdata.csv` - Target domain gene expression data (samples x genes)
->- `targetlabel.csv` - Binary labels (0/1) for target domain samples
->
->Make sure the data dimensions (number of gene features) match between source and target domains.
+>For the required file structure, please refer to **"Custom downstream dataset format (drug response prediction)"** above.
 
