@@ -37,8 +37,16 @@ for ((i=0; i<RUNS; i++)); do
 
   echo "[Run ${i}] Pretrain -> ${PRETRAIN_OUTFOLDER}"
 
-  # Default pretraining (uses built-in CCLE/TCGA pretrain files referenced in data.py: pretrain_data())
-  ${PYTHON_BIN} -u pretrain.py --outfolder "${PRETRAIN_OUTFOLDER}"
+  # Skip pretraining if the final weights already exist.
+  # This file is also used by classifier.py to decide whether a pretrained model is available.
+  PRETRAIN_DONE_FLAG="${PRETRAIN_OUTFOLDER}/pt_epochs_0,t_epochs_100,Ptlr_0.001,tlr0.001_vae_latent_diffusion_ablation_no_proto/after_traingan_shared_vae.pth"
+
+  if [[ -f "${PRETRAIN_DONE_FLAG}" ]]; then
+    echo "[Run ${i}] Found pretrained weights, skip pretraining: ${PRETRAIN_DONE_FLAG}"
+  else
+    # Default pretraining (uses built-in CCLE/TCGA pretrain files referenced in data.py: pretrain_data())
+    ${PYTHON_BIN} -u pretrain.py --outfolder "${PRETRAIN_OUTFOLDER}"
+  fi
 
   echo "[Run ${i}] Classifier (TCGA default in classifier.py) -> ${CLASSIFIER_OUTFOLDER}"
 
