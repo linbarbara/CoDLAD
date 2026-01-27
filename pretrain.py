@@ -11,6 +11,7 @@ import torch.autograd as autograd
 import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader
+from sklearn.preprocessing import LabelEncoder
 
 from data import *  
 from tools.dataprocess import *  
@@ -239,8 +240,8 @@ def train_vae_with_latent_diffusion(
 
 
 def pretrain_vae_latent_diffusion(sourcedata, targetdata, param, parent_folder, batch_size=64):
-    """VAE + latent diffusion pretraining (ablation: no prototype loss)"""
-    print("Start VAE + latent diffusion pretraining (ablation: no prototype loss)")
+    """VAE + latent diffusion pretraining"""
+    print("Start VAE + latent diffusion pretraining")
 
     # Params
     pretrain_epochs = param["pretrain_num_epochs"]
@@ -408,7 +409,7 @@ def pretrain_vae_latent_diffusion(sourcedata, targetdata, param, parent_folder, 
                     eval_batches += 1
 
                 for tdata, tlabels in tcga_test_loader:
-                    tdata, tlabels = tdata.to(device), tdata.to(device) if False else (tdata.to(device), tlabels.to(device))
+                    tdata, tlabels = tdata.to(device), tlabels.to(device)
                     tlabels_float = tlabels.float().unsqueeze(1) if tlabels.dim() == 1 else tlabels.float()
 
                     tcga_re_x, _, tcga_mu, tcga_sigma = shared_vae(tdata)
@@ -576,15 +577,17 @@ def main_pretrain(i):
     }
     keys, values = zip(*params_grid.items())
     update_params_dict_list = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    sourcepretrain, targetpretrain = pretrain_data()
-    pretrain_path = os.path.join('./result/pretrain_vae_latent_diffusion','pretrain'+str(i))
+    sourcepretrain, targetpretrain, unique_labels, batch_size = pretrain_data()
+    pretrain_path = os.path.join('./result/pretrain_vae_latent_diffusion', 'pretrain' + str(i))
     safemakedirs(pretrain_path)
+
     for param_dict in update_params_dict_list:
+        param_dict["unique_labels"] = unique_labels
         pretrain_vae_latent_diffusion(
                 sourcepretrain,
                 targetpretrain,
                 param=param_dict,
-                parent_folder=args.outfolder,
+                parent_folder=pretrain_path,
                 batch_size=batch_size,
             )
 
@@ -600,6 +603,8 @@ if __name__ == "__main__":
         )
         parser.add_argument("--source", dest="source", default=None, type=str, help=".csv file address for the source")
         parser.add_argument("--target", dest="target", default=None, type=str, help=".csv file address for the target")
+        parser.add_argument("--source_tissue", dest="source_tissue", default=None, type=str, help=".csv file with tissue labels for source (column: tissue/Tissue_name)")
+        parser.add_argument("--target_tissue", dest="target_tissue", default=None, type=str, help=".csv file with tissue labels for target (column: tissue/Tissue_name)")
         args = parser.parse_args()
 
         params_grid = {
@@ -613,7 +618,34 @@ if __name__ == "__main__":
 
         safemakedirs(args.outfolder)
 
-        sourcepretrain, targetpretrain, unique_labels, batch_size = pretrain_data()
+        # Default: use built-in CCLE/TCGA pretraining data
+        if args.source is None and args.target is None:
+            sourcepretrain, targetpretrain, unique_labels, batch_size = pretrain_data()
+
+        # External pretraining: require gene expression CSV + tissue CSV for both domains
+        else:
+            if args.source is None or args.target is None:
+                raise ValueError("Both --source and --target must be provided for external data pretraining.")
+            if args.source_tissue is None or args.target_tissue is None:
+                raise ValueError("Both --source_tissue and --target_tissue are required for external data pretraining.")
+
+            source_feat = pd.read_csv(args.source, index_col=0, header=0)
+            target_feat = pd.read_csv(args.target, index_col=0, header=0)
+            source_tissue = pd.read_csv(args.source_tissue, index_col=0)
+            target_tissue = pd.read_csv(args.target_tissue, index_col=0)
+
+            le = LabelEncoder()
+            src_col = next((c for c in ("tissue", "Tissue_name", "tissue_name") if c in source_tissue.columns), None)
+            tgt_col = next((c for c in ("tissue", "Tissue_name", "tissue_name") if c in target_tissue.columns), None)
+            if src_col is None or tgt_col is None:
+                raise ValueError("Tissue files must contain one of: tissue / Tissue_name / tissue_name")
+
+            le.fit(pd.concat([source_tissue[src_col].astype(str), target_tissue[tgt_col].astype(str)], axis=0))
+            unique_labels = list(range(len(le.classes_)))
+
+            (sourcepretrain, _), _, batch_size = pretrain_loader(source_feat, source_tissue, label_encoder=le, batch_size=64)
+            (targetpretrain, _), _, _ = pretrain_loader(target_feat, target_tissue, label_encoder=le, batch_size=batch_size)
+
         for param_dict in update_params_dict_list:
             param_dict["unique_labels"] = unique_labels
             pretrain_vae_latent_diffusion(
