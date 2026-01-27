@@ -1,4 +1,5 @@
 # CoDLAD
+=========
 Source code and data for "A Variational Autoencoder Framework with Tissue-Conditioned Latent Diffusion for Cross-Domain Anticancer Drug Response Prediction"
 
 # Requirements
@@ -34,7 +35,7 @@ All implementations of CoDLAD are based on PyTorch. CoDLAD requires the followin
 Since the `pretrain_tcga.csv` file exceeds GitHub's size limit, it has been split into 14 parts. You **must** merge these parts using our script before running any pretraining. The script automatically handles relative paths.
 
 ```bash
-# Run this from the project root
+<!-- Run this from the project root -->
 python scripts/merge_data.py
 
 ## Data Preparation and Custom Data Usage
