@@ -31,7 +31,6 @@ All implementations of CoDLAD are based on PyTorch. CoDLAD requires the followin
 
 ## Data Restoration
 
-### English:
 Since the `pretrain_tcga.csv` file exceeds GitHub's size limit, it has been split into 14 parts. You **must** merge these parts using our script before running any pretraining. The script automatically handles relative paths.
 
 ```bash
