@@ -323,31 +323,55 @@ def step_1_finetune_vae_latent_diffusion(parent_folder, drug_list, drug_smiles, 
     print(best_df)
     return all_metrics
 
-def main_train_classifier(i):
-    pretrain_model = './result/pretrain_vae_latent_diffusion/pretrain'+str(i)
-    outfolder = './result/classifier_vae_latent_diffusion'
-    outname = 'result'+str(i)+'.csv'
+def main_train_classifier(i, dataset="TCGA", pretrain_model=None, outfolder="./result/classifier_vae_latent_diffusion", outname=None, drugpth="./result/drug_encoder.pth", otherfolder=None, drug_csv=None):
+    if pretrain_model is None:
+        pretrain_model = './result/pretrain_vae_latent_diffusion/pretrain' + str(i)
+    if outname is None:
+        outname = 'vae_latent_result' + str(i) + '.csv'
+
     safemakedirs(outfolder)
-    # for dataset in ['PDTC', 'TCGA']:
-    for dataset in ['TCGA']:
-    # for dataset in ['PDTC']:
-        if dataset == 'PDTC':
-            pdtc_drug_file = pd.read_csv(os.path.join('data', 'pdtc_gdsc_drug_mapping.csv'), index_col=0)
-            drug_list = pdtc_drug_file.index.tolist()
-            classifier_metrics = classifier_finetune(pretrain_model, drug_list, dataset, outfolder, 'PDTC_'+outname)
-            classifier_file_path = './time_txt/pdtc_vae_latent'
-            safemakedirs(classifier_file_path)
-            classifier_file = './time_txt/pdtc_vae_latent/PDTC_vae_latent_time'+str(i)+'.txt'
-            with open(classifier_file, "w") as file:
-                file.write(json.dumps(classifier_metrics))
-        elif  dataset == 'TCGA':
-            drug_list = ['cis', 'sor', 'tem', 'gem', 'fu']
-            classifier_metrics = classifier_finetune(pretrain_model, drug_list, dataset, outfolder, 'TCGA_'+outname)
-            classifier_file_path = './time_txt/tcga_vae_latent'
-            safemakedirs(classifier_file_path)
-            classifier_file = './time_txt/tcga_vae_latent/tcga_vae_latent_time'+str(i)+'.txt'
-            with open(classifier_file, "w") as file:
-                file.write(json.dumps(classifier_metrics))
+    drugmodel_pth = torch.load(drugpth)
+
+    if dataset == 'PDTC':
+        pdtc_drug_file = pd.read_csv(os.path.join('data', 'pdtc_gdsc_drug_mapping.csv'), index_col=0)
+        drug_list = pdtc_drug_file.index.tolist()
+        drug_smiles = pdtc_drug_file['smiles'].tolist()
+        metrics = step_1_finetune_vae_latent_diffusion(pretrain_model, drug_list, drug_smiles, dataset, outfolder, 'PDTC_' + outname, drugmodel_pth)
+        classifier_file_path = './time_txt/pdtc_vae_latent'
+        safemakedirs(classifier_file_path)
+        classifier_file = './time_txt/pdtc_vae_latent/PDTC_vae_latent_time' + str(i) + '.txt'
+        with open(classifier_file, "w") as file:
+            file.write(json.dumps(metrics))
+
+    elif dataset == 'TCGA':
+        drug_list = ['cis', 'sor', 'tem', 'gem', 'fu']
+        drug_smiles = ['N.N.Cl[Pt]Cl', 'CNC(=O)C1=NC=CC(=C1)OC2=CC=C(C=C2)NC(=O)NC3=CC(=C(C=C3)Cl)C(F)(F)F',
+                      'CN1C(=O)N2C=NC(=C2N=N1)C(=O)N', 'C1=CN(C(=O)N=C1N)C2C(C(C(O2)CO)O)(F)F', 'C1=C(C(=O)NC(=O)N1)F']
+        metrics = step_1_finetune_vae_latent_diffusion(pretrain_model, drug_list, drug_smiles, dataset, outfolder, 'TCGA_' + outname, drugmodel_pth)
+        classifier_file_path = './time_txt/tcga_vae_latent'
+        safemakedirs(classifier_file_path)
+        classifier_file = './time_txt/tcga_vae_latent/tcga_vae_latent_time' + str(i) + '.txt'
+        with open(classifier_file, "w") as file:
+            file.write(json.dumps(metrics))
+
+    elif dataset == 'other':
+        if drug_csv is None:
+            raise ValueError("For dataset='other', you must provide drug_csv (path to CSV with smiles) and otherfolder")
+        if otherfolder is None:
+            raise ValueError("For dataset='other', you must provide otherfolder")
+
+        drug_file = pd.read_csv(drug_csv, index_col=0)
+        drug_list = drug_file.index.tolist()
+        drug_smiles = drug_file['smiles'].tolist()
+        metrics = step_1_finetune_vae_latent_diffusion(pretrain_model, drug_list, drug_smiles, dataset, outfolder, 'other_' + outname, drugmodel_pth, otherfolder=otherfolder)
+        classifier_file_path = './time_txt'
+        safemakedirs(classifier_file_path)
+        classifier_file = os.path.join(classifier_file_path, 'other_vae_latent_time' + str(i) + '.txt')
+        with open(classifier_file, "w") as file:
+            file.write(json.dumps(metrics))
+
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
 
 if __name__ == '__main__':  
     for i in range(10):
@@ -390,5 +414,5 @@ if __name__ == '__main__':
             drug_smiles = drug_file['smiles'].tolist()
             step1_metrics = step_1_finetune_vae_latent_diffusion(args.pretrain_model, drug_list, drug_smiles, args.dataset, args.outfolder, 'other_'+args.outname, drugmodel_pth, otherfolder=args.data)
             classifier_file_path = 'other_vae_latent_time'+str(i)+'.txt'
-            with open(classifier_file, "w") as file:
+            with open(classifier_file_path, "w") as file:
                 file.write(json.dumps(step1_metrics))
