@@ -64,20 +64,22 @@ def pretrain_data():
     logging.info(f"Common tissue types between CCLE and TCGA: {common_labels.tolist()}")
     logging.info(f"CCLE exclusive tissue types: {ccle_label_counts.index.difference(tcga_label_counts.index).tolist()}")
 
-    train_xena_df = pd.DataFrame(columns=xena_df.columns)
+    train_xena_parts = []
     for label in common_labels:
         label_mask = tcga_labels == label
         label_samples = xena_df[label_mask]
         target_count = ccle_label_counts[label]
-        
+
         if len(label_samples) < target_count:
             logging.info(f"Upsampling TCGA tissue type {label}: {len(label_samples)} -> {target_count}")
             label_samples = resample(label_samples, replace=True, n_samples=target_count, random_state=2020)
         elif len(label_samples) > target_count:
             logging.info(f"Downsampling TCGA tissue type {label}: {len(label_samples)} -> {target_count}")
             label_samples = resample(label_samples, replace=False, n_samples=target_count, random_state=2020)
-        
-        train_xena_df = pd.concat([train_xena_df, label_samples])
+
+        train_xena_parts.append(label_samples)
+
+    train_xena_df = pd.concat(train_xena_parts, axis=0) if len(train_xena_parts) > 0 else xena_df.iloc[0:0].copy()
 
     remaining_xena_df = xena_df.loc[~xena_df.index.isin(train_xena_df.index)]
     if len(remaining_xena_df) > 0:
@@ -135,17 +137,76 @@ def pretrain_data():
     logging.info(f"TCGA train: {len(train_xena_df)}, test: {len(test_xena_df)}")
     return (ccle_loader, ccle_test_dataset), (tcga_loader, tcga_test_dataset), unique_labels, batch_size
 
-def pretrain_loader(df:pd.DataFrame):
-    train_df, test_df = train_test_split(df, test_size=0.2)
+def pretrain_loader(
+    feature_df: pd.DataFrame,
+    tissue_df: pd.DataFrame,
+    *,
+    label_encoder: LabelEncoder | None = None,
+    batch_size: int = 64,
+    test_size: float = 0.1,
+    random_state: int = 2020,
+):
+    """Build (train_loader, test_dataset, unique_labels, batch_size) for pretraining.
+
+    This is the external-data counterpart of `pretrain_data()`.
+
+    Parameters
+    - feature_df: gene expression matrix, shape (n_samples, n_genes), index = sample ids
+    - tissue_df: must contain column `tissue_name` or `Tissue_name` or `tissue`, index = sample ids
+    - label_encoder: optional sklearn LabelEncoder. If None, it will be fit on provided tissue labels.
+
+    Returns
+    - (train_loader, test_dataset), unique_labels, batch_size
+    """
+
+    # Align
+    tissue_col = None
+    for c in ("tissue_name", "Tissue_name", "tissue"):
+        if c in tissue_df.columns:
+            tissue_col = c
+            break
+    if tissue_col is None:
+        raise ValueError("tissue_df must contain a tissue column: tissue_name / Tissue_name / tissue")
+
+    common = feature_df.index.intersection(tissue_df.index)
+    if len(common) == 0:
+        raise ValueError("No overlapping sample ids between feature_df and tissue_df")
+
+    feature_df = feature_df.loc[common]
+    tissue_series = tissue_df.loc[common, tissue_col].astype(str)
+
+    # Train/test split (stratified by tissue)
+    train_df, test_df = train_test_split(
+        feature_df,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=tissue_series,
+    )
+
+    train_tissue = tissue_series.loc[train_df.index]
+    test_tissue = tissue_series.loc[test_df.index]
+
+    # Label encoding
+    le = label_encoder if label_encoder is not None else LabelEncoder()
+    if label_encoder is None:
+        le.fit(pd.concat([train_tissue, test_tissue], axis=0))
+
+    unique_labels = list(range(len(le.classes_)))
+
+    train_labels = torch.tensor(le.transform(train_tissue)).to(device)
+    test_labels = torch.tensor(le.transform(test_tissue)).to(device)
+
     train_tensor = torch.from_numpy(train_df.values).type(torch.float32).to(device)
     test_tensor = torch.from_numpy(test_df.values).type(torch.float32).to(device)
-    batch_size = 64
-    train_dataset = TensorDataset(train_tensor)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    test_dataset = TensorDataset(test_tensor)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    return train_dataloader, test_dataloader
 
+    # Keep same behavior as pretrain_data: TensorDataset(features, tissue_label)
+    train_dataset = TensorDataset(train_tensor, train_labels)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+
+    test_dataset = TensorDataset(test_tensor, test_labels)
+
+    return (train_loader, test_dataset), unique_labels, batch_size
+    
 def PDTC_source_5fold(gdsc_drug, drug_for_tissue_path):
     measurement = 'Z_SCORE'
     threshold = 0.0
@@ -311,7 +372,6 @@ def TCGA_data_generator(drug):
     ccle_data_tuple = TCGA_source_5fold(drug)
     for ccle_train_data, ccle_eval_data in ccle_data_tuple:
         yield ccle_train_data, ccle_eval_data, tcga_data
-
 
 def other_data_generator(datafolder):
     os.path.join(datafolder)
