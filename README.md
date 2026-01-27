@@ -1,5 +1,4 @@
 # CoDLAD
-=========
 Source code and data for "A Variational Autoencoder Framework with Tissue-Conditioned Latent Diffusion for Cross-Domain Anticancer Drug Response Prediction"
 
 # Requirements
