@@ -1,5 +1,4 @@
 # CoDLAD
-===============================
 Source code and data for "A Variational Autoencoder Framework with Tissue-Conditioned Latent Diffusion for Cross-Domain Anticancer Drug Response Prediction"
 
 # Requirements
@@ -30,22 +29,20 @@ All implementations of CoDLAD are based on PyTorch. CoDLAD requires the followin
 - pretrain.py defines the training of the domain invariant feature extraction phase of the model.
 - classifier.py defines the classifier training of the model.
 
+## Data Restoration
+
+### English:
+Since the `pretrain_tcga.csv` file exceeds GitHub's size limit, it has been split into 14 parts. You **must** merge these parts using our script before running any pretraining. The script automatically handles relative paths.
+
+```bash
+# Run this from the project root
+python scripts/merge_data.py
+
 ## Data Preparation and Custom Data Usage
 
 To run **CoDLAD**, users need to organize their data into a **source domain** and a **target domain** with **consistent feature dimensions**. In our implementation, the source domain corresponds to **cell line gene expression data**, while the target domain corresponds to **patient (or tumor) gene expression data**.
 
 In this work, we follow the data preprocessing protocol adopted in **CodeAE** [1], and use preprocessed CCLE and TCGA datasets as the default inputs. Each sample is represented by a fixed-dimensional gene expression vector (e.g., 1426 genes) and is associated with a **one-dimensional categorical tissue label**, which is used as conditional information during pretraining.
-
-### Using Your Own Data
-To use custom datasets with CoDLAD, please ensure that the following requirements are satisfied:
-
-- Source and target domain data must be formatted as **numerical gene expression matrices** with the **same number of features**.
-- Each sample must have a corresponding **tissue label** (categorical), which will be encoded and used as conditional supervision.
-- The data should be split into **training and test sets**, following the same structure as the data returned by the `pretrain_data()` function.
-
-We recommend organizing custom datasets by following the file structure and format provided in the `data/TCGA/` directory, which serves as a concrete example fully compatible with the current training pipeline.
-
-> **Note:** The current implementation assumes that tissue labels are available for both source and target domains. If tissue labels are missing, additional preprocessing (e.g., assigning dummy labels) is required to ensure compatibility with the training code.
 
 ### Reference
 
