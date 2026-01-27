@@ -37,18 +37,28 @@ Since the `pretrain_tcga.csv` file exceeds GitHub's size limit, it has been spli
 ```bash
 <!-- Run this from the project root -->
 python scripts/merge_data.py
+```
 
 ## Data Preparation and Custom Data Usage
 
 To run **CoDLAD**, users need to organize their data into a **source domain** and a **target domain** with **consistent feature dimensions**. In our implementation, the source domain corresponds to **cell line gene expression data**, while the target domain corresponds to **patient (or tumor) gene expression data**.
 
-In this work, we follow the data preprocessing protocol adopted in **CodeAE** [1], and use preprocessed CCLE and TCGA datasets as the default inputs. Each sample is represented by a fixed-dimensional gene expression vector (e.g., 1426 genes) and is associated with a **one-dimensional categorical tissue label**, which is used as conditional information during pretraining.
+### Data Structure Requirements
+
+For both source and target domains, you need to provide the following files in each medication folder:
+
+1. `sourcedata.csv` - Source domain gene expression data (samples x genes)
+2. `sourcelabel.csv` - Binary labels for source domain samples (0/1)
+3. `targetdata.csv` - Target domain gene expression data (samples x genes)
+4. `targetlabel.csv` - Binary labels for target domain samples (0/1)
+
+Note:
+>You need to ensure that the data dimensions (gene features) of your source and target domains are the same.
 
 ### Reference
 
 [1] He, D., et al. *A context-aware deconfounding autoencoder for robust prediction of personalized clinical drug response from cell-line compound screening.*  
 **Nature Machine Intelligence**, 4(10): 879–892, 2022.
-
 
 ## Usage
 
@@ -124,6 +134,12 @@ Alternatively, you can run our program with your own data and some other setting
 Note: 
 >You need to ensure that the data dimensions of your source and target domains are the same.
 
-> The **your_data_folder** is a folder that contains many medication folders while each medication folder contains sourcedata.csv, targetdata.csv, sourcelabel.csv, targetlabel.csv. The format of each file can be referred to. /data/TCGA.
-
+> The **your_data_folder** is a folder that contains multiple medication folders. Each medication folder must contain the following four CSV files:
+>
+>- `sourcedata.csv` - Source domain gene expression data (samples x genes)
+>- `sourcelabel.csv` - Binary labels (0/1) for source domain samples
+>- `targetdata.csv` - Target domain gene expression data (samples x genes)
+>- `targetlabel.csv` - Binary labels (0/1) for target domain samples
+>
+>Make sure the data dimensions (number of gene features) match between source and target domains.
 
