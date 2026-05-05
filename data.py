@@ -321,7 +321,7 @@ def TCGA_source_5fold(drug):
 
     with open(os.path.join('data', 'label_encoder.pkl'), 'rb') as f:
         le = pickle.load(f)
-    ccle_tissue_file = os.path.join('/home/linling/ll2/dapl-zhuzhi/data/TCGA', drug + 'data', 'cclelabel_with_tissue.csv')  
+    ccle_tissue_file = os.path.join('data/TCGA', drug + 'data', 'cclelabel_with_tissue.csv')  
     if not os.path.exists(ccle_tissue_file):
         logging.warning(f"Tissue file not found for drug {drug} at {ccle_tissue_file}, using default mapping.")
         ccle_tissue = pd.Series(index=ccle_features_df.index, dtype=str)  
